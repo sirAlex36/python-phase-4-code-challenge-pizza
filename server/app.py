@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from models import db, Restaurant, RestaurantPizza, Pizza
 from flask_migrate import Migrate
-from flask import Flask, request, make_response
+from flask import Flask, request, make_response, jsonify
 from flask_restful import Api, Resource
 import os
 
@@ -24,6 +24,50 @@ api = Api(app)
 def index():
     return "<h1>Code challenge</h1>"
 
+@app.route('/restaurants', methods=['GET'])
+def get_restaurant():
+   restaurants = [r.to_dict(only=('id', 'name', 'address')) for r in Restaurant.query.all()]
+   return make_response(jsonify(restaurants), 200)
+    
+@app.route('/restaurants/<int:id>', methods=['GET'])
+def get_restaurant_by_id(id):
+    restaurant = Restaurant.query.filter_by(id=id).first()
+    if restaurant:
+        return make_response(
+            jsonify(restaurant.to_dict(rules=('restaurant_pizzas', '-restaurant_pizzas.restaurant'))), 
+            200
+        )
+    return make_response(jsonify({"error": "Restaurant not found"}), 404)
+
+@app.route('/restaurants/<int:id>', methods=['DELETE'])
+def delete_restaurant(id):
+    restaurant = Restaurant.query.filter_by(id=id).first()
+    if restaurant:
+        db.session.delete(restaurant)
+        db.session.commit()
+        return make_response(jsonify({}), 204)
+    return make_response(jsonify({"error": "Restaurant not found"}), 404)
+
+@app.route('/pizzas', methods=['GET'])
+def get_pizzas():
+    pizzas = [p.to_dict() for p in Pizza.query.all()]
+    return make_response(jsonify(pizzas), 200)
+
+@app.route('/restaurant_pizzas', methods=['POST'])
+def create_restaurant_pizza():
+    data = request.get_json()
+    try:
+        new_rp = RestaurantPizza(
+            price=data.get('price'),
+            pizza_id=data.get('pizza_id'),
+            restaurant_id=data.get('restaurant_id')
+        )
+        db.session.add(new_rp)
+        db.session.commit()
+        return make_response(jsonify(new_rp.to_dict()), 201)
+        
+    except (ValueError, Exception):
+        return make_response(jsonify({"errors": ["validation errors"]}), 400)
 
 if __name__ == "__main__":
     app.run(port=5555, debug=True)
